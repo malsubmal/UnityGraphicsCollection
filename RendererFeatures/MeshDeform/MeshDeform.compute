@@ -1,0 +1,30 @@
+#pragma kernel MeshDeform
+
+#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+#include "Packages/com.unity.render-pipelines.core/Runtime/GPUDriven/InstanceData/InstanceTransformUpdateDefs.cs.hlsl"
+
+CBUFFER_START(Params)
+float4 CenterOffset;
+float Radius;
+float LerpValue;
+int VertexCount;
+
+//vertex buffer descriptor
+int PosOffset; //byte count
+int VertexBufferStride; //byte count
+CBUFFER_END
+
+StructuredBuffer<float3> OriginalMeshVertexPosition;
+RWByteAddressBuffer UpdatedMeshVertexPosition;
+
+[numthreads(64,1,1)]
+void MeshDeform (uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= VertexCount) return;
+    float3 original_pos = OriginalMeshVertexPosition[id.x];
+    float3 offset_pos = CenterOffset + original_pos;
+    float3 normalized_pos = normalize(offset_pos);
+    float3 scaled_pos = normalized_pos * Radius;
+    float3 lerped_pos = lerp(original_pos, scaled_pos, LerpValue);
+    UpdatedMeshVertexPosition.Store3(PosOffset + id.x * VertexBufferStride, asuint(lerped_pos));
+}
