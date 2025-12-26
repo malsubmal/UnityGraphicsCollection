@@ -1,7 +1,6 @@
 #pragma kernel MeshDeform
 
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
-#include "Packages/com.unity.render-pipelines.core/Runtime/GPUDriven/InstanceData/InstanceTransformUpdateDefs.cs.hlsl"
 
 CBUFFER_START(Params)
 float4 CenterOffset;
@@ -17,14 +16,25 @@ CBUFFER_END
 StructuredBuffer<float3> OriginalMeshVertexPosition;
 RWByteAddressBuffer UpdatedMeshVertexPosition;
 
+real InflateMeshVertex(real3 originalPos)
+{
+    real3 offset_pos = CenterOffset + originalPos;
+    real3 normalized_pos = normalize(offset_pos);
+    real3 scaled_pos = normalized_pos * Radius;
+    return scaled_pos;
+}
+
+uint GetByteAddressIndex(uint3 id)
+{
+    return PosOffset + id.x * VertexBufferStride;
+}
+
 [numthreads(64,1,1)]
 void MeshDeform (uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= VertexCount) return;
-    float3 original_pos = OriginalMeshVertexPosition[id.x];
-    float3 offset_pos = CenterOffset + original_pos;
-    float3 normalized_pos = normalize(offset_pos);
-    float3 scaled_pos = normalized_pos * Radius;
-    float3 lerped_pos = lerp(original_pos, scaled_pos, LerpValue);
-    UpdatedMeshVertexPosition.Store3(PosOffset + id.x * VertexBufferStride, asuint(lerped_pos));
+    real3 original_pos = OriginalMeshVertexPosition[id.x];
+    real3 scaled_pos = InflateMeshVertex(original_pos);
+    real3 lerped_pos = lerp(original_pos, scaled_pos, LerpValue);
+    UpdatedMeshVertexPosition.Store3(GetByteAddressIndex(id), asuint(lerped_pos));
 }
